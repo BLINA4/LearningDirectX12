@@ -51,7 +51,11 @@ struct alignas( 16 ) MaterialProperties
         const float specularPower = 128.0f,
         const DirectX::XMFLOAT4 ambient  = { 0, 0, 0, 1 },
         const DirectX::XMFLOAT4 emissive = { 0, 0, 0, 1 },
-        const DirectX::XMFLOAT4 reflectance = { 0, 0, 0, 0 }, const float opacity = 1.0f,
+        const DirectX::XMFLOAT4 reflectance = { 0, 0, 0, 0 },
+        const DirectX::XMFLOAT4 albedo = { 0, 0, 0, 1 }, 
+        const DirectX::XMFLOAT4 roughness = { 0, 0, 0, 1 }, 
+        const DirectX::XMFLOAT4 metallic = { 0, 0, 0, 1 },
+        const DirectX::XMFLOAT4 ambientocclusion = { 0, 0, 0, 1 }, const float opacity = 1.0f,
         const float indexOfRefraction = 0.0f, const float bumpIntensity = 1.0f,
         const float alphaThreshold = 0.1f 
     )
@@ -60,6 +64,10 @@ struct alignas( 16 ) MaterialProperties
     , Emissive( emissive )
     , Ambient( ambient )
     , Reflectance( reflectance )
+    , Albedo( albedo )
+    , Roughness( roughness )
+    , Metallic( metallic )
+    , AmbientOcclusion( ambientocclusion )
     , Opacity( opacity )
     , SpecularPower( specularPower )
     , IndexOfRefraction( indexOfRefraction )
@@ -68,6 +76,10 @@ struct alignas( 16 ) MaterialProperties
     , HasEmissiveTexture( false )
     , HasDiffuseTexture( false )
     , HasSpecularTexture( false )
+    , HasAlbedoTexture( false )
+    , HasRoughnessTexture( false )
+    , HasMetallicTexture( false )
+    , HasAmbientOcclusionTexture( false )
     , HasSpecularPowerTexture( false )
     , HasNormalTexture( false )
     , HasBumpTexture( false )
@@ -84,6 +96,14 @@ struct alignas( 16 ) MaterialProperties
     //------------------------------------ ( 16 bytes )
     DirectX::XMFLOAT4 Reflectance;
     //------------------------------------ ( 16 bytes )
+    DirectX::XMFLOAT4 Albedo;
+    //------------------------------------ ( 16 bytes )
+    DirectX::XMFLOAT4 Roughness;
+    //------------------------------------ ( 16 bytes )
+    DirectX::XMFLOAT4 Metallic;
+    //------------------------------------ ( 16 bytes )
+    DirectX::XMFLOAT4 AmbientOcclusion;
+    //------------------------------------ ( 16 bytes )
     float Opacity;                       // If Opacity < 1, then the material is transparent.
     float SpecularPower;
     float IndexOfRefraction;             // For transparent materials, IOR > 0.
@@ -94,6 +114,11 @@ struct alignas( 16 ) MaterialProperties
     uint32_t HasEmissiveTexture;
     uint32_t HasDiffuseTexture;
     uint32_t HasSpecularTexture;
+    //------------------------------------ ( 16 bytes )
+    uint32_t HasAlbedoTexture;
+    uint32_t HasRoughnessTexture;
+    uint32_t HasMetallicTexture;
+    uint32_t HasAmbientOcclusionTexture;
     //------------------------------------ ( 16 bytes )
     uint32_t HasSpecularPowerTexture;
     uint32_t HasNormalTexture;
@@ -115,6 +140,10 @@ public:
         Diffuse,
         Specular,
         SpecularPower,
+        Albedo,
+        Roughness,
+        Metallic,
+        AmbientOcclusion,
         Normal,
         Bump,
         Opacity,
@@ -143,6 +172,18 @@ public:
 
     const DirectX::XMFLOAT4& GetReflectance() const;
     void                     SetReflectance( const DirectX::XMFLOAT4& reflectance );
+
+    const DirectX::XMFLOAT4& GetAlbedo() const;
+    void                     SetAlbedo( const DirectX::XMFLOAT4& albedo );
+
+    const DirectX::XMFLOAT4& GetRoughness() const;
+    void                     SetRoughness( const DirectX::XMFLOAT4& roughness );
+
+    const DirectX::XMFLOAT4& GetMetallic() const;
+    void                     SetMetallic( const DirectX::XMFLOAT4& metallic );
+
+    const DirectX::XMFLOAT4& GetAmbientOcclusion() const;
+    void                     SetAmbientOcclusion( const DirectX::XMFLOAT4& ambientocclusion );
 
     const float GetOpacity() const;
     void        SetOpacity( float opacity );

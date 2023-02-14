@@ -165,6 +165,10 @@ void Scene::ImportMaterial( CommandList& commandList, const aiMaterial& material
     aiColor4D   specularColor;
     aiColor4D   ambientColor;
     aiColor4D   emissiveColor;
+    aiColor4D   albedoColor;
+    aiColor4D   roughnessColor;
+    aiColor4D   metallicColor;
+    aiColor4D   aoColor;
     float       opacity;
     float       indexOfRefraction;
     float       reflectivity;
@@ -188,6 +192,18 @@ void Scene::ImportMaterial( CommandList& commandList, const aiMaterial& material
     if ( material.Get( AI_MATKEY_COLOR_SPECULAR, specularColor ) == aiReturn_SUCCESS )
     {
         pMaterial->SetSpecularColor( XMFLOAT4( specularColor.r, specularColor.g, specularColor.b, specularColor.a ) );
+    }
+    if ( material.Get( "$mat.gltf.pbrMetallicRoughness.baseColorFactor", 0, 0, albedoColor ) == aiReturn_SUCCESS )
+    {
+        pMaterial->SetAlbedo( XMFLOAT4( albedoColor.r, albedoColor.g, albedoColor.b, albedoColor.a ) );
+    }
+    if ( material.Get( "$mat.gltf.pbrMetallicRoughness.metallicFactor", 0, 0, metallicColor ) == aiReturn_SUCCESS )
+    {
+        pMaterial->SetMetallic( XMFLOAT4( metallicColor.r, metallicColor.g, metallicColor.b, metallicColor.a ) );
+    }
+    if ( material.Get( "$mat.gltf.pbrMetallicRoughness.roughnessFactor", 0, 0, roughnessColor ) == aiReturn_SUCCESS )
+    {
+        pMaterial->SetRoughness( XMFLOAT4( roughnessColor.r, roughnessColor.g, roughnessColor.b, roughnessColor.a ) );
     }
     if ( material.Get( AI_MATKEY_SHININESS, shininess ) == aiReturn_SUCCESS )
     {
@@ -248,6 +264,36 @@ void Scene::ImportMaterial( CommandList& commandList, const aiMaterial& material
         fs::path texturePath( aiTexturePath.C_Str() );
         auto     texture = commandList.LoadTextureFromFile( parentPath / texturePath, true );
         pMaterial->SetTexture( Material::TextureType::Specular, texture );
+    }
+
+    // Load metallic texture.
+    if ( material.GetTextureCount( aiTextureType_METALNESS ) > 0 &&
+         material.GetTexture( aiTextureType_METALNESS, 0, &aiTexturePath, nullptr, nullptr, &blendFactor,
+                              &aiBlendOperation ) == aiReturn_SUCCESS )
+    {
+        fs::path texturePath( aiTexturePath.C_Str() );
+        auto     texture = commandList.LoadTextureFromFile( parentPath / texturePath, true );
+        pMaterial->SetTexture( Material::TextureType::Metallic, texture );
+    }
+
+    // Load roughness texture.
+    if ( material.GetTextureCount( aiTextureType_DIFFUSE_ROUGHNESS ) > 0 &&
+         material.GetTexture( aiTextureType_DIFFUSE_ROUGHNESS, 0, &aiTexturePath, nullptr, nullptr, &blendFactor,
+                              &aiBlendOperation ) == aiReturn_SUCCESS )
+    {
+        fs::path texturePath( aiTexturePath.C_Str() );
+        auto     texture = commandList.LoadTextureFromFile( parentPath / texturePath, true );
+        pMaterial->SetTexture( Material::TextureType::Roughness, texture );
+    }
+
+    // Load ao texture.
+    if ( material.GetTextureCount( aiTextureType_AMBIENT_OCCLUSION ) > 0 &&
+         material.GetTexture( aiTextureType_AMBIENT_OCCLUSION, 0, &aiTexturePath, nullptr, nullptr, &blendFactor,
+                              &aiBlendOperation ) == aiReturn_SUCCESS )
+    {
+        fs::path texturePath( aiTexturePath.C_Str() );
+        auto     texture = commandList.LoadTextureFromFile( parentPath / texturePath, true );
+        pMaterial->SetTexture( Material::TextureType::AmbientOcclusion, texture );
     }
 
     // Load specular power texture.

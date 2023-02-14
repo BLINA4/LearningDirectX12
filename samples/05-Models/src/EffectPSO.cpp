@@ -15,7 +15,7 @@
 using namespace Microsoft::WRL;
 using namespace dx12lib;
 
-EffectPSO::EffectPSO( std::shared_ptr<dx12lib::Device> device, bool enableLighting, bool enableDecal )
+EffectPSO::EffectPSO( std::shared_ptr<dx12lib::Device> device, bool enableLighting, bool enableDecal, bool isPBR )
 : m_Device( device )
 , m_DirtyFlags( DF_All )
 , m_pPreviousCommandList( nullptr )
@@ -31,18 +31,27 @@ EffectPSO::EffectPSO( std::shared_ptr<dx12lib::Device> device, bool enableLighti
 
     // Load the pixel shader.
     ComPtr<ID3DBlob> pixelShaderBlob;
-    if (enableLighting) {
-        if (enableDecal) {
-            ThrowIfFailed( D3DReadFileToBlob( L"data/shaders/05-Models/Decal_PS.cso", &pixelShaderBlob ) );
-        }
-        else
-        {
-            ThrowIfFailed( D3DReadFileToBlob( L"data/shaders/05-Models/Lighting_PS.cso", &pixelShaderBlob ) );
-        }
+    if ( isPBR )
+    {
+        ThrowIfFailed( D3DReadFileToBlob( L"data/shaders/05-Models/PBR_PS.cso", &pixelShaderBlob ) );
     }
     else
     {
-        ThrowIfFailed( D3DReadFileToBlob( L"data/shaders/05-Models/Unlit_PS.cso", &pixelShaderBlob ) );
+        if ( enableLighting )
+        {
+            if ( enableDecal )
+            {
+                ThrowIfFailed( D3DReadFileToBlob( L"data/shaders/05-Models/Decal_PS.cso", &pixelShaderBlob ) );
+            }
+            else
+            {
+                ThrowIfFailed( D3DReadFileToBlob( L"data/shaders/05-Models/Lighting_PS.cso", &pixelShaderBlob ) );
+            }
+        }
+        else
+        {
+            ThrowIfFailed( D3DReadFileToBlob( L"data/shaders/05-Models/Unlit_PS.cso", &pixelShaderBlob ) );
+        }
     }
 
     // Create a root signature.
@@ -53,7 +62,7 @@ EffectPSO::EffectPSO( std::shared_ptr<dx12lib::Device> device, bool enableLighti
                                                     D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
     // Descriptor range for the textures.
-    CD3DX12_DESCRIPTOR_RANGE1 descriptorRage( D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8, 3 );
+    CD3DX12_DESCRIPTOR_RANGE1 descriptorRage( D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 12, 3 );
 
     // clang-format off
     CD3DX12_ROOT_PARAMETER1 rootParameters[RootParameters::NumRootParameters];
@@ -178,10 +187,14 @@ void EffectPSO::Apply( CommandList& commandList )
             BindTexture( commandList, 1, m_Material->GetTexture( TextureType::Emissive ) );
             BindTexture( commandList, 2, m_Material->GetTexture( TextureType::Diffuse ) );
             BindTexture( commandList, 3, m_Material->GetTexture( TextureType::Specular ) );
-            BindTexture( commandList, 4, m_Material->GetTexture( TextureType::SpecularPower ) );
-            BindTexture( commandList, 5, m_Material->GetTexture( TextureType::Normal ) );
-            BindTexture( commandList, 6, m_Material->GetTexture( TextureType::Bump ) );
-            BindTexture( commandList, 7, m_Material->GetTexture( TextureType::Opacity ) );
+            BindTexture( commandList, 4, m_Material->GetTexture( TextureType::Albedo ) );
+            BindTexture( commandList, 5, m_Material->GetTexture( TextureType::Roughness ) );
+            BindTexture( commandList, 6, m_Material->GetTexture( TextureType::Metallic ) );
+            BindTexture( commandList, 7, m_Material->GetTexture( TextureType::AmbientOcclusion ) );
+            BindTexture( commandList, 8, m_Material->GetTexture( TextureType::SpecularPower ) );
+            BindTexture( commandList, 9, m_Material->GetTexture( TextureType::Normal ) );
+            BindTexture( commandList, 10, m_Material->GetTexture( TextureType::Bump ) );
+            BindTexture( commandList, 11, m_Material->GetTexture( TextureType::Opacity ) );
         }
     }
 

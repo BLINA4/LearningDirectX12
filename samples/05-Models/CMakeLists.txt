@@ -29,6 +29,7 @@ set( PIXEL_SHADERS
     shaders/Decal_PS.hlsl
     shaders/Lighting_PS.hlsl
     shaders/Unlit_PS.hlsl
+    shaders/PBR_PS.hlsl
 )
 
 set( SHADER_INCLUDES

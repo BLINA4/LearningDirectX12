@@ -89,14 +89,18 @@ public:
                    // Texture2D EmissiveTexture : register( t4 );
                    // Texture2D DiffuseTexture : register( t5 );
                    // Texture2D SpecularTexture : register( t6 );
-                   // Texture2D SpecularPowerTexture : register( t7 );
-                   // Texture2D NormalTexture : register( t8 );
-                   // Texture2D BumpTexture : register( t9 );
-                   // Texture2D OpacityTexture : register( t10 );
+                   // Texture2D AlbedoTexture       : register( t7 );
+                   // Texture2D RoughnessTexture : register( t8 );
+                   // Texture2D MetallicTexture : register( t9 );
+                   // Texture2D AmbientOcclusionTexture : register( t10 );
+                   // Texture2D SpecularPowerTexture : register( t11 );
+                   // Texture2D NormalTexture : register( t12 );
+                   // Texture2D BumpTexture : register( t13 );
+                   // Texture2D OpacityTexture : register( t14 );
         NumRootParameters
     };
 
-    EffectPSO( std::shared_ptr<dx12lib::Device> device, bool enableLigting, bool enableDecal );
+    EffectPSO( std::shared_ptr<dx12lib::Device> device, bool enableLigting, bool enableDecal, bool isPBR );
     virtual ~EffectPSO();
 
     const std::vector<PointLight>& GetPointLights() const

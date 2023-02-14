@@ -20,6 +20,14 @@ struct Material
     //------------------------------------ ( 16 bytes )
     float4 Reflectance;
     //------------------------------------ ( 16 bytes )
+    float4 Albedo;
+    //------------------------------------ ( 16 bytes )
+    float4 Roughness;
+    //------------------------------------ ( 16 bytes )
+    float4 Metallic;
+    //------------------------------------ ( 16 bytes )
+    float4 AmbientOcclusion;
+    //------------------------------------ ( 16 bytes )
     float Opacity;            // If Opacity < 1, then the material is transparent.
     float SpecularPower;
     float IndexOfRefraction;  // For transparent materials, IOR > 0.
@@ -31,12 +39,17 @@ struct Material
     bool  HasDiffuseTexture;
     bool  HasSpecularTexture;
     //------------------------------------ ( 16 bytes )
+    bool  HasAlbedoTexture;
+    bool  HasRoughnessTexture;
+    bool  HasMetallicTexture;
+    bool  HasAmbientOcclusionTexture;
+    //------------------------------------ ( 16 bytes )
     bool  HasSpecularPowerTexture;
     bool  HasNormalTexture;
     bool  HasBumpTexture;
     bool  HasOpacityTexture;
     //------------------------------------ ( 16 bytes )
-    // Total:                              ( 16 * 8 = 128 bytes )
+    // Total:                              ( 16 * 13 = 198 bytes )
 };
 
 #if ENABLE_LIGHTING
@@ -117,16 +130,20 @@ StructuredBuffer<DirectionalLight> DirectionalLights : register( t2 );
 ConstantBuffer<Material> MaterialCB : register( b0, space1 );
 
 // Textures
-Texture2D AmbientTexture       : register( t3 );
-Texture2D EmissiveTexture      : register( t4 );
-Texture2D DiffuseTexture       : register( t5 );
-Texture2D SpecularTexture      : register( t6 );
-Texture2D SpecularPowerTexture : register( t7 );
-Texture2D NormalTexture        : register( t8 );
-Texture2D BumpTexture          : register( t9 );
-Texture2D OpacityTexture       : register( t10 );
+Texture2D AmbientTexture            : register( t3 );
+Texture2D EmissiveTexture           : register( t4 );
+Texture2D DiffuseTexture            : register( t5 );
+Texture2D SpecularTexture           : register( t6 );
+Texture2D AlbedoTexture             : register( t7 );
+Texture2D RoughnessTexture          : register( t8 );
+Texture2D MetallicTexture           : register( t9 );
+Texture2D AmbientOcclusionTexture   : register( t10 );
+Texture2D SpecularPowerTexture      : register( t11 );
+Texture2D NormalTexture             : register( t12 );
+Texture2D BumpTexture               : register( t13 );
+Texture2D OpacityTexture            : register( t14 );
 
-SamplerState TextureSampler    : register(s0);
+SamplerState TextureSampler         : register(s0);
 
 float3 LinearToSRGB( float3 x )
 {
@@ -304,7 +321,6 @@ float3 DoBumpMapping( float3x3 TBN, Texture2D tex, float2 uv, float bumpScale )
     return normal;
 }
 
-
 // If c is not black, then blend the color with the texture
 // otherwise, replace the color with the texture.
 float4 SampleTexture(Texture2D t, float2 uv, float4 c)
@@ -345,11 +361,11 @@ float4 main( PixelShaderInput IN ): SV_Target
     float specularPower = material.SpecularPower;
     float2 uv = IN.TexCoord.xy;
 
-    if (material.HasAmbientTexture)
+    if ( material.HasAmbientTexture )
     {
         ambient = SampleTexture( AmbientTexture, uv, ambient );
     }
-    if (material.HasEmissiveTexture)
+    if ( material.HasEmissiveTexture )
     {
         emissive = SampleTexture( EmissiveTexture, uv, emissive );
     }
@@ -357,7 +373,7 @@ float4 main( PixelShaderInput IN ): SV_Target
     {
         diffuse = SampleTexture( DiffuseTexture, uv, diffuse );
     }
-    if (material.HasSpecularPowerTexture)
+    if ( material.HasSpecularPowerTexture )
     {
         specularPower *= SpecularPowerTexture.Sample( TextureSampler, uv ).r;
     }

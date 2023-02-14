@@ -329,13 +329,14 @@ unsigned int aiGetMaterialTextureCount(const C_STRUCT aiMaterial* pMat,
 
     // Textures are always stored with ascending indices (ValidateDS provides a check, so we don't need to do it again)
     unsigned int max = 0;
+
     for (unsigned int i = 0; i < pMat->mNumProperties;++i) {
         aiMaterialProperty* prop = pMat->mProperties[i];
 
         if ( prop /* just a sanity check ... */
-            && 0 == strcmp( prop->mKey.data, _AI_MATKEY_TEXTURE_BASE )
-            && prop->mSemantic == type) {
-
+             && 0 == strcmp( prop->mKey.data, _AI_MATKEY_TEXTURE_BASE )
+             && prop->mSemantic == type )
+        {
             max = std::max(max,prop->mIndex+1);
         }
     }

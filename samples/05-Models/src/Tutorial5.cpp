@@ -150,7 +150,7 @@ uint32_t Tutorial5::Run()
     auto retCode = GameFramework::Get().Run();
 
     // Make sure the loading task is finished
-    m_LoadingTask.get();
+    //m_LoadingTask.get();
 
     UnloadContent();
 
@@ -228,8 +228,10 @@ void Tutorial5::LoadContent()
     GameFramework::Get().WndProcHandler += WndProcEvent::slot( &GUI::WndProcHandler, m_GUI );
 
     // Start the loading task to perform async loading of the scene file.
-    m_LoadingTask = std::async( std::launch::async, std::bind( &Tutorial5::LoadScene, this,
-                                                               L"Assets/Models/crytek-sponza/sponza_nobanner.obj" ) );
+    //m_LoadingTask = std::async( std::launch::async, std::bind( &Tutorial5::LoadScene, this,
+    //                                                          L"Assets/Models/crytek-sponza/sponza.obj" ) );
+    
+    Tutorial5::LoadScene( L"Assets/Models/Sponza/glTF/Sponza.gltf" );
 
     // Load a few (procedural) models to represent the light sources in the scene.
     auto& commandQueue = m_Device->GetCommandQueue( D3D12_COMMAND_LIST_TYPE_COPY );
@@ -239,12 +241,16 @@ void Tutorial5::LoadContent()
     m_Cone   = commandList->CreateCone( 0.1f, 0.2f );
     m_Axis   = commandList->LoadSceneFromFile( L"Assets/Models/axis_of_evil.nff" );
 
+    // Load metal spheres model.
+    m_MetalSpheres = commandList->LoadSceneFromFile( L"Assets/Models/MetalRoughSpheres/glTF/MetalRoughSpheres.gltf" );
+
     auto fence = commandQueue.ExecuteCommandList( commandList );
 
     // Create a PSOs
-    m_LightingPSO = std::make_shared<EffectPSO>( m_Device, true, false );
-    m_DecalPSO    = std::make_shared<EffectPSO>( m_Device, true, true );
-    m_UnlitPSO    = std::make_shared<EffectPSO>( m_Device, false, false );
+    m_LightingPSO = std::make_shared<EffectPSO>( m_Device, true,  false, false );
+    m_DecalPSO    = std::make_shared<EffectPSO>( m_Device, true,  true,  false );
+    m_UnlitPSO    = std::make_shared<EffectPSO>( m_Device, false, false, false );
+    m_PBRPSO      = std::make_shared<EffectPSO>( m_Device, true,  true,  true  );
 
     // Create a color buffer with sRGB for gamma correction.
     DXGI_FORMAT backBufferFormat  = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
@@ -328,7 +334,7 @@ void Tutorial5::OnUpdate( UpdateEventArgs& e )
 
     const int numDirectionalLights = 3;
 
-    static const XMVECTORF32 LightColors[] = { Colors::White, Colors::OrangeRed, Colors::Blue };
+    static const XMVECTORF32 LightColors[] = { Colors::White, Colors::LightYellow, Colors::WhiteSmoke };
 
     static float lightAnimTime = 0.0f;
     if ( m_AnimateLights )
@@ -398,64 +404,132 @@ void Tutorial5::OnRender()
     }
     else
     {
-        SceneVisitor opaquePass( *commandList, m_Camera, *m_LightingPSO, false );
-        SceneVisitor transparentPass( *commandList, m_Camera, *m_DecalPSO, true );
-        SceneVisitor unlitPass( *commandList, m_Camera, *m_UnlitPSO, false );
-
-        // Clear the render targets.
+        if ( !m_IsPBR )
         {
-            FLOAT clearColor[] = { 0.4f, 0.6f, 0.9f, 1.0f };
+            SceneVisitor opaquePass( *commandList, m_Camera, *m_LightingPSO, false );
+            SceneVisitor transparentPass( *commandList, m_Camera, *m_DecalPSO, true );
+            SceneVisitor unlitPass( *commandList, m_Camera, *m_UnlitPSO, false );
 
-            commandList->ClearTexture( renderTarget.GetTexture( AttachmentPoint::Color0 ), clearColor );
-            commandList->ClearDepthStencilTexture( renderTarget.GetTexture( AttachmentPoint::DepthStencil ),
-                                                   D3D12_CLEAR_FLAG_DEPTH );
+            // Clear the render targets.
+            {
+                FLOAT clearColor[] = { 0.4f, 0.6f, 0.9f, 1.0f };
+
+                commandList->ClearTexture( renderTarget.GetTexture( AttachmentPoint::Color0 ), clearColor );
+                commandList->ClearDepthStencilTexture( renderTarget.GetTexture( AttachmentPoint::DepthStencil ),
+                                                       D3D12_CLEAR_FLAG_DEPTH );
+            }
+
+            commandList->SetViewport( m_Viewport );
+            commandList->SetScissorRect( m_ScissorRect );
+            commandList->SetRenderTarget( m_RenderTarget );
+
+            // Render the scene.
+            // Opaque pass.
+            m_Scene->Accept( opaquePass );
+            m_Axis->Accept( unlitPass );
+            m_MetalSpheres->Accept( opaquePass );
+
+            // Transparent pass.
+            m_Scene->Accept( transparentPass );
+            m_MetalSpheres->Accept( transparentPass );
+
+            MaterialProperties lightMaterial = Material::Black;
+            for ( const auto& l: m_PointLights )
+            {
+                lightMaterial.Emissive = l.Color;
+                auto lightPos          = XMLoadFloat4( &l.PositionWS );
+                auto worldMatrix       = XMMatrixTranslationFromVector( lightPos );
+
+                m_Sphere->GetRootNode()->SetLocalTransform( worldMatrix );
+                m_Sphere->GetRootNode()->GetMesh()->GetMaterial()->SetMaterialProperties( lightMaterial );
+                m_Sphere->Accept( unlitPass );
+            }
+
+            for ( const auto& l: m_SpotLights )
+            {
+                lightMaterial.Emissive = l.Color;
+                XMVECTOR lightPos      = XMLoadFloat4( &l.PositionWS );
+                XMVECTOR lightDir      = XMLoadFloat4( &l.DirectionWS );
+                XMVECTOR up            = XMVectorSet( 0, 1, 0, 0 );
+
+                // Rotate the cone so it is facing the Z axis.
+                auto rotationMatrix = XMMatrixRotationX( XMConvertToRadians( -90.0f ) );
+                auto worldMatrix    = rotationMatrix * LookAtMatrix( lightPos, lightDir, up );
+
+                m_Cone->GetRootNode()->SetLocalTransform( worldMatrix );
+                m_Cone->GetRootNode()->GetMesh()->GetMaterial()->SetMaterialProperties( lightMaterial );
+                m_Cone->Accept( unlitPass );
+            }
+
+            // Resolve the MSAA render target to the swapchain's backbuffer.
+            auto swapChainBackBuffer = m_SwapChain->GetRenderTarget().GetTexture( AttachmentPoint::Color0 );
+            auto msaaRenderTarget    = m_RenderTarget.GetTexture( AttachmentPoint::Color0 );
+
+            commandList->ResolveSubresource( swapChainBackBuffer, msaaRenderTarget );
         }
-
-        commandList->SetViewport( m_Viewport );
-        commandList->SetScissorRect( m_ScissorRect );
-        commandList->SetRenderTarget( m_RenderTarget );
-
-        // Render the scene.
-        // Opaque pass.
-        m_Scene->Accept( opaquePass );
-        m_Axis->Accept( unlitPass );
-
-        // Transparent pass.
-        m_Scene->Accept( transparentPass );
-
-        MaterialProperties lightMaterial = Material::Black;
-        for ( const auto& l: m_PointLights )
+        else
         {
-            lightMaterial.Emissive = l.Color;
-            auto lightPos          = XMLoadFloat4( &l.PositionWS );
-            auto worldMatrix       = XMMatrixTranslationFromVector( lightPos );
+            SceneVisitor opaquePass( *commandList, m_Camera, *m_PBRPSO, false );
+            SceneVisitor transparentPass( *commandList, m_Camera, *m_PBRPSO, true );
+            SceneVisitor unlitPass( *commandList, m_Camera, *m_PBRPSO, false );
 
-            m_Sphere->GetRootNode()->SetLocalTransform( worldMatrix );
-            m_Sphere->GetRootNode()->GetMesh()->GetMaterial()->SetMaterialProperties( lightMaterial );
-            m_Sphere->Accept( unlitPass );
+            // Clear the render targets.
+            {
+                FLOAT clearColor[] = { 0.4f, 0.6f, 0.9f, 1.0f };
+
+                commandList->ClearTexture( renderTarget.GetTexture( AttachmentPoint::Color0 ), clearColor );
+                commandList->ClearDepthStencilTexture( renderTarget.GetTexture( AttachmentPoint::DepthStencil ),
+                                                       D3D12_CLEAR_FLAG_DEPTH );
+            }
+
+            commandList->SetViewport( m_Viewport );
+            commandList->SetScissorRect( m_ScissorRect );
+            commandList->SetRenderTarget( m_RenderTarget );
+
+            // Render the scene.
+            // Opaque pass.
+            m_Scene->Accept( opaquePass );
+            m_Axis->Accept( unlitPass );
+            m_MetalSpheres->Accept( opaquePass );
+
+            // Transparent pass.
+            m_Scene->Accept( transparentPass );
+            m_MetalSpheres->Accept( transparentPass );
+
+            MaterialProperties lightMaterial = Material::Black;
+            for ( const auto& l: m_PointLights )
+            {
+                lightMaterial.Emissive = l.Color;
+                auto lightPos          = XMLoadFloat4( &l.PositionWS );
+                auto worldMatrix       = XMMatrixTranslationFromVector( lightPos );
+
+                m_Sphere->GetRootNode()->SetLocalTransform( worldMatrix );
+                m_Sphere->GetRootNode()->GetMesh()->GetMaterial()->SetMaterialProperties( lightMaterial );
+                m_Sphere->Accept( unlitPass );
+            }
+
+            for ( const auto& l: m_SpotLights )
+            {
+                lightMaterial.Emissive = l.Color;
+                XMVECTOR lightPos      = XMLoadFloat4( &l.PositionWS );
+                XMVECTOR lightDir      = XMLoadFloat4( &l.DirectionWS );
+                XMVECTOR up            = XMVectorSet( 0, 1, 0, 0 );
+
+                // Rotate the cone so it is facing the Z axis.
+                auto rotationMatrix = XMMatrixRotationX( XMConvertToRadians( -90.0f ) );
+                auto worldMatrix    = rotationMatrix * LookAtMatrix( lightPos, lightDir, up );
+
+                m_Cone->GetRootNode()->SetLocalTransform( worldMatrix );
+                m_Cone->GetRootNode()->GetMesh()->GetMaterial()->SetMaterialProperties( lightMaterial );
+                m_Cone->Accept( unlitPass );
+            }
+
+            // Resolve the MSAA render target to the swapchain's backbuffer.
+            auto swapChainBackBuffer = m_SwapChain->GetRenderTarget().GetTexture( AttachmentPoint::Color0 );
+            auto msaaRenderTarget    = m_RenderTarget.GetTexture( AttachmentPoint::Color0 );
+
+            commandList->ResolveSubresource( swapChainBackBuffer, msaaRenderTarget );
         }
-
-        for ( const auto& l: m_SpotLights )
-        {
-            lightMaterial.Emissive = l.Color;
-            XMVECTOR lightPos      = XMLoadFloat4( &l.PositionWS );
-            XMVECTOR lightDir      = XMLoadFloat4( &l.DirectionWS );
-            XMVECTOR up            = XMVectorSet( 0, 1, 0, 0 );
-
-            // Rotate the cone so it is facing the Z axis.
-            auto rotationMatrix = XMMatrixRotationX( XMConvertToRadians( -90.0f ) );
-            auto worldMatrix    = rotationMatrix * LookAtMatrix( lightPos, lightDir, up );
-
-            m_Cone->GetRootNode()->SetLocalTransform( worldMatrix );
-            m_Cone->GetRootNode()->GetMesh()->GetMaterial()->SetMaterialProperties( lightMaterial );
-            m_Cone->Accept( unlitPass );
-        }
-
-        // Resolve the MSAA render target to the swapchain's backbuffer.
-        auto swapChainBackBuffer = m_SwapChain->GetRenderTarget().GetTexture( AttachmentPoint::Color0 );
-        auto msaaRenderTarget    = m_RenderTarget.GetTexture( AttachmentPoint::Color0 );
-
-        commandList->ResolveSubresource( swapChainBackBuffer, msaaRenderTarget );
     }
 
     OnGUI( commandList, m_SwapChain->GetRenderTarget() );
@@ -489,6 +563,9 @@ void Tutorial5::OnKeyPressed( KeyEventArgs& e )
                 }
                 break;
             }
+        case KeyCode::Tab:
+            m_IsPBR = !m_IsPBR;
+            break;
         case KeyCode::V:
             m_SwapChain->ToggleVSync();
             break;
@@ -648,6 +725,7 @@ void Tutorial5::OnGUI( const std::shared_ptr<CommandList>& commandList, const Re
         ImGui::BulletText( "ESC: Terminate application" );
         ImGui::BulletText( "Alt+Enter: Toggle fullscreen" );
         ImGui::BulletText( "F11: Toggle fullscreen" );
+        ImGui::BulletText( "TAB: Switch render mode" );
         ImGui::BulletText( "W: Move camera forward" );
         ImGui::BulletText( "A: Move camera left" );
         ImGui::BulletText( "S: Move camera backward" );

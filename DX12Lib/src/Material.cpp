@@ -90,6 +90,46 @@ void Material::SetReflectance( const DirectX::XMFLOAT4& reflectance )
     m_MaterialProperties->Reflectance = reflectance;
 }
 
+const DirectX::XMFLOAT4& Material::GetAlbedo() const
+{
+    return m_MaterialProperties->Albedo;
+}
+
+void Material::SetAlbedo( const DirectX::XMFLOAT4& albedo )
+{
+    m_MaterialProperties->Albedo = albedo;
+}
+
+const DirectX::XMFLOAT4& Material::GetRoughness() const
+{
+    return m_MaterialProperties->Roughness;
+}
+
+void Material::SetRoughness( const DirectX::XMFLOAT4& roughness )
+{
+    m_MaterialProperties->Roughness = roughness;
+}
+
+const DirectX::XMFLOAT4& Material::GetMetallic() const
+{
+    return m_MaterialProperties->Metallic;
+}
+
+void Material::SetMetallic( const DirectX::XMFLOAT4& metallic )
+{
+    m_MaterialProperties->Metallic = metallic;
+}
+
+const DirectX::XMFLOAT4& Material::GetAmbientOcclusion() const
+{
+    return m_MaterialProperties->AmbientOcclusion;
+}
+
+void Material::SetAmbientOcclusion( const DirectX::XMFLOAT4& ambientocclusion )
+{
+    m_MaterialProperties->AmbientOcclusion = ambientocclusion;
+}
+
 const float Material::GetOpacity() const
 {
     return m_MaterialProperties->Opacity;
@@ -155,6 +195,26 @@ void Material::SetTexture( TextureType type, std::shared_ptr<Texture> texture )
     case TextureType::Specular:
     {
         m_MaterialProperties->HasSpecularTexture = ( texture != nullptr );
+    }
+    break;
+    case TextureType::Albedo:
+    {
+        m_MaterialProperties->HasAlbedoTexture = ( texture != nullptr );
+    }
+    break;
+    case TextureType::Roughness:
+    {
+        m_MaterialProperties->HasRoughnessTexture = ( texture != nullptr );
+    }
+    break;
+    case TextureType::Metallic:
+    {
+        m_MaterialProperties->HasMetallicTexture = ( texture != nullptr );
+    }
+    break;
+    case TextureType::AmbientOcclusion:
+    {
+        m_MaterialProperties->HasAmbientOcclusionTexture = ( texture != nullptr );
     }
     break;
     case TextureType::SpecularPower:

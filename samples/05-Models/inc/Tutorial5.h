@@ -155,11 +155,14 @@ private:
     std::shared_ptr<dx12lib::Scene> m_Cone;
     std::shared_ptr<dx12lib::Scene> m_Axis;
 
+    // Metal spheres object.
+    std::shared_ptr<dx12lib::Scene> m_MetalSpheres;
 
     // Pipeline state object for rendering the scene.
     std::shared_ptr<EffectPSO> m_LightingPSO;
     std::shared_ptr<EffectPSO> m_DecalPSO;
     std::shared_ptr<EffectPSO> m_UnlitPSO;
+    std::shared_ptr<EffectPSO> m_PBRPSO;
 
     // Render target
     dx12lib::RenderTarget m_RenderTarget;
@@ -176,6 +179,7 @@ private:
     int  m_Width;
     int  m_Height;
     bool m_VSync;
+    bool m_IsPBR = false;
 
     // Define some lights.
     std::vector<PointLight> m_PointLights;
