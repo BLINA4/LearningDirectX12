@@ -361,7 +361,7 @@ float3 DoDirectionalLights( float3 V, float3 P, float3 N, float F0, float3 rough
     for (int i = 0; i < LightPropertiesCB.NumDirectionalLights; ++i) 
     {
         /* Calculate per-light radiance */
-        float3 L = normalize(DirectionalLights[i].DirectionVS);
+        float3 L = normalize(-DirectionalLights[i].DirectionVS.xyz);
         float3 H = normalize(V + L);
         float3 radiance = DirectionalLights[i].Color;
 
@@ -603,9 +603,7 @@ float4 main( PixelShaderInput IN, float4 ScreenCoord : SV_Position ) : SV_TARGET
     Lo += DoSpotLights(V, P, N, F0, roughness, metallic, albedo);
     Lo += DoDirectionalLights(V, P, N, F0, roughness, metallic, albedo);
     
-    /* Ambient lighting (note that the next IBL tutorial will replace 
-     * this ambient lighting with environment lighting).
-     */
+    /* Ambient lightning */
     float3 ambient = float3(0.03f, 0.03f, 0.03f) * albedo * ao;
 
     float3 color = ambient + Lo;
