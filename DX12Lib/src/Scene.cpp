@@ -254,6 +254,7 @@ void Scene::ImportMaterial( CommandList& commandList, const aiMaterial& material
         fs::path texturePath( aiTexturePath.C_Str() );
         auto     texture = commandList.LoadTextureFromFile( parentPath / texturePath, true );
         pMaterial->SetTexture( Material::TextureType::Diffuse, texture );
+        pMaterial->SetTexture( Material::TextureType::Albedo, texture );
     }
 
     // Load specular texture.

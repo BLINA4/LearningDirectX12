@@ -154,6 +154,23 @@ float3 LinearToSRGB( float3 x )
     return x < 0.0031308 ? 12.92 * x : 1.13005 * sqrt(abs(x - 0.00228)) - 0.13448 * x + 0.005719;
 }
 
+float3 SRGBToLinear( float3 x )
+{
+    // This is exactly the sRGB curve
+    //return x < 0.0031308 ? 12.92 * x : 1.055 * pow(abs(x), 1.0 / 2.4) - 0.055;
+
+    // This is cheaper but nearly equivalent
+    return x < 0.0031308 ? 12.92 * x : 1.13005 * sqrt(abs(x - 0.00228)) - 0.13448 * x + 0.005719;
+}
+
+float DoSpotCone( float3 spotDir, float3 L, float spotAngle )
+{
+    float minCos = cos(spotAngle);
+    float maxCos = (minCos + 1.0f) / 2.0f;
+    float cosAngle = dot(spotDir, -L);
+    return smoothstep(minCos, maxCos, cosAngle);
+}
+
 /* Normal distribution function.
  * Arguments:
  *   - Normal vector
@@ -302,7 +319,60 @@ float3 DoSpotLights( float3 V, float3 P, float3 N, float F0, float3 roughness, f
         float3 H = normalize(V + L);
         float distance = length(SpotLights[i].PositionVS - P);
         float attenuation = DoAttenuation(SpotLights[i].ConstantAttenuation, SpotLights[i].ConstantAttenuation, SpotLights[i].ConstantAttenuation, distance);
-        float3 radiance = SpotLights[i].Color * attenuation;
+        float3 radiance = SpotLights[i].Color * attenuation * DoSpotCone( SpotLights[i].DirectionVS.xyz, L, SpotLights[i].SpotAngle );
+
+        /* Cook-Torrance BRDF */
+        float NDF = DistributionGGX(N, H, roughness);   
+        float G   = GeometrySmith(N, V, L, roughness);      
+        float3 F  = fresnelSchlick(clamp(dot(H, V), 0.0, 1.0), F0);
+           
+        float3 numerator    = NDF * G * F; 
+        float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001; // + 0.0001 to prevent divide by zero
+        float3 specular = numerator / denominator;
+        
+        /* kS is equal to Fresnel */
+        float3 kS = F;
+        
+        /* For energy conservation, the diffuse and specular light can't
+         * be above 1.0 (unless the surface emits light); to preserve this
+         * relationship the diffuse component (kD) should equal 1.0 - kS. */
+        float3 kD = float3(1.0f, 1.0f, 1.0f) - kS;
+
+        /* multiply kD by the inverse metalness such that only non-metals 
+         * have diffuse lighting, or a linear blend if partly metal (pure metals
+         * have no diffuse light). */
+        kD *= 1.0 - metallic;	  
+
+        /* Scale light by NdotL */
+        float NdotL = max(dot(N, L), 0.0);        
+
+        /* Add to outgoing radiance Lo */
+        Lo += (kD * albedo / PI + specular) * radiance * NdotL;  /* note that we already multiplied the BRDF by the Fresnel (kS) so we won't multiply by kS again */
+    }
+
+    return Lo;
+}
+
+/* Directional light calculating function.
+ * Arguments:
+ *   - Vector to view position
+ *   - Vector to point
+ *   - Normal vector
+ *   - Reflectance coefficient
+ *   - Roughness value
+ *   - Metallic value
+ *   - Albedo value
+ */
+float3 DoDirectionalLights( float3 V, float3 P, float3 N, float F0, float3 roughness, float3 metallic, float3 albedo )
+{
+    /* Reflectance equation */
+    float3 Lo = float3(0.0f, 0.0f, 0.0f);
+    for (int i = 0; i < LightPropertiesCB.NumDirectionalLights; ++i) 
+    {
+        /* Calculate per-light radiance */
+        float3 L = normalize(DirectionalLights[i].DirectionVS);
+        float3 H = normalize(V + L);
+        float3 radiance = DirectionalLights[i].Color;
 
         /* Cook-Torrance BRDF */
         float NDF = DistributionGGX(N, H, roughness);   
@@ -351,6 +421,46 @@ float4 SampleTexture( Texture2D t, float2 uv, float4 c )
     else
     {
         c = t.Sample(TextureSampler, uv);
+    }
+
+    return c;
+}
+
+/* Sampling for metallic texture function.
+ * Arguments:
+ *   - texture structure
+ *   - texture coordinates
+ *   - blending constant
+ */
+float4 SampleMetallicTexture( Texture2D t, float2 uv, float4 c )
+{
+    if (any(c.rgb))
+    {
+        c *= t.Sample(TextureSampler, uv).b;
+    }
+    else
+    {
+        c = t.Sample(TextureSampler, uv).b;
+    }
+
+    return c;
+}
+
+/* Sampling for roughness texture function.
+ * Arguments:
+ *   - texture structure
+ *   - texture coordinates
+ *   - blending constant
+ */
+float4 SampleRoughnessTexture( Texture2D t, float2 uv, float4 c )
+{
+    if (any(c.rgb))
+    {
+        c *= t.Sample(TextureSampler, uv).g;
+    }
+    else
+    {
+        c = t.Sample(TextureSampler, uv).g;
     }
 
     return c;
@@ -446,13 +556,10 @@ float4 main( PixelShaderInput IN, float4 ScreenCoord : SV_Position ) : SV_TARGET
     {
         albedo = SampleTexture(AlbedoTexture, uv, albedo);
     }
-    if (material.HasRoughnessTexture)
-    {
-        roughness = SampleTexture(RoughnessTexture, uv, roughness);
-    }
     if (material.HasMetallicTexture)
     {
-        metallic = SampleTexture(MetallicTexture, uv, metallic);
+        metallic = SampleMetallicTexture(MetallicTexture, uv, metallic);
+        roughness = SampleRoughnessTexture(MetallicTexture, uv, roughness);
     }
     if (material.HasAmbientOcclusionTexture)
     {
@@ -502,7 +609,8 @@ float4 main( PixelShaderInput IN, float4 ScreenCoord : SV_Position ) : SV_TARGET
     float3 Lo = float3(0.0f, 0.0f, 0.0f);
     
     Lo += DoPointLights(V, P, N, F0, roughness, metallic, albedo);
-    //Lo += DoSpotLights(V, P, N, F0, roughness, metallic, albedo);
+    Lo += DoSpotLights(V, P, N, F0, roughness, metallic, albedo);
+    Lo += DoDirectionalLights(V, P, N, F0, roughness, metallic, albedo);
     
     /* Ambient lighting (note that the next IBL tutorial will replace 
      * this ambient lighting with environment lighting).
@@ -515,6 +623,5 @@ float4 main( PixelShaderInput IN, float4 ScreenCoord : SV_Position ) : SV_TARGET
     color = color / (color + float3(1.0f, 1.0f, 1.0f));
     
     /* Gamma correction */
-    return albedo;
-    //return float4(LinearToSRGB(color), alpha * material.Opacity);
+    return float4(color, alpha * material.Opacity);
 }

@@ -366,6 +366,7 @@ void Tutorial5::OnUpdate( UpdateEventArgs& e )
 
     m_LightingPSO->SetDirectionalLights( m_DirectionalLights );
     m_DecalPSO->SetDirectionalLights( m_DirectionalLights );
+    m_PBRPSO->SetDirectionalLights( m_DirectionalLights );
 
     OnRender();
 }
