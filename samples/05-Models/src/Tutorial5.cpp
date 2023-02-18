@@ -334,7 +334,7 @@ void Tutorial5::OnUpdate( UpdateEventArgs& e )
 
     const int numDirectionalLights = 3;
 
-    static const XMVECTORF32 LightColors[] = { Colors::White, Colors::LightYellow, Colors::WhiteSmoke };
+    static const XMVECTORF32 LightColors[] = { Colors::WhiteSmoke, Colors::LightYellow, Colors::DeepSkyBlue };
 
     static float lightAnimTime = 0.0f;
     if ( m_AnimateLights )

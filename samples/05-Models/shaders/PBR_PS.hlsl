@@ -148,10 +148,15 @@ SamplerState TextureSampler         : register(s0);
 float3 LinearToSRGB( float3 x )
 {
     // This is exactly the sRGB curve
-    //return x < 0.0031308 ? 12.92 * x : 1.055 * pow(abs(x), 1.0 / 2.4) - 0.055;
+    return x < 0.0031308 ? 12.92 * x : 1.055 * pow(abs(x), 1.0 / 2.4) - 0.055;
 
     // This is cheaper but nearly equivalent
-    return x < 0.0031308 ? 12.92 * x : 1.13005 * sqrt(abs(x - 0.00228)) - 0.13448 * x + 0.005719;
+    //return x < 0.0031308 ? 12.92 * x : 1.13005 * sqrt(abs(x - 0.00228)) - 0.13448 * x + 0.005719;
+}
+
+float3 SRGBToLinear( float3 x )
+{
+    return pow(x, 1.0 / 2.2);
 }
 
 float DoSpotCone( float3 spotDir, float3 L, float spotAngle )
@@ -244,7 +249,7 @@ float DoAttenuation( float c, float l, float q, float d )
  *   - Metallic value
  *   - Albedo value
  */
-float3 DoPointLights( float3 V, float3 P, float3 N, float F0, float3 roughness, float3 metallic, float3 albedo )
+float3 DoPointLights( float3 V, float3 P, float3 N, float F0, float roughness, float metallic, float3 albedo )
 {
     /* Reflectance equation */
     float3 Lo = float3(0.0f, 0.0f, 0.0f);
@@ -254,7 +259,7 @@ float3 DoPointLights( float3 V, float3 P, float3 N, float F0, float3 roughness, 
         float3 L = normalize(PointLights[i].PositionVS - P);
         float3 H = normalize(V + L);
         float distance = length(PointLights[i].PositionVS - P);
-        float attenuation = DoAttenuation(PointLights[i].ConstantAttenuation, PointLights[i].ConstantAttenuation, PointLights[i].ConstantAttenuation, distance);
+        float attenuation = DoAttenuation(PointLights[i].ConstantAttenuation, PointLights[i].LinearAttenuation, PointLights[i].QuadraticAttenuation, distance);
         float3 radiance = PointLights[i].Color * attenuation;
 
         /* Cook-Torrance BRDF */
@@ -299,7 +304,7 @@ float3 DoPointLights( float3 V, float3 P, float3 N, float F0, float3 roughness, 
  *   - Metallic value
  *   - Albedo value
  */
-float3 DoSpotLights( float3 V, float3 P, float3 N, float F0, float3 roughness, float3 metallic, float3 albedo )
+float3 DoSpotLights( float3 V, float3 P, float3 N, float F0, float roughness, float metallic, float3 albedo )
 {
     /* Reflectance equation */
     float3 Lo = float3(0.0f, 0.0f, 0.0f);
@@ -309,7 +314,7 @@ float3 DoSpotLights( float3 V, float3 P, float3 N, float F0, float3 roughness, f
         float3 L = normalize(SpotLights[i].PositionVS - P);
         float3 H = normalize(V + L);
         float distance = length(SpotLights[i].PositionVS - P);
-        float attenuation = DoAttenuation(SpotLights[i].ConstantAttenuation, SpotLights[i].ConstantAttenuation, SpotLights[i].ConstantAttenuation, distance);
+        float attenuation = DoAttenuation(SpotLights[i].ConstantAttenuation, SpotLights[i].LinearAttenuation, SpotLights[i].QuadraticAttenuation, distance);
         float3 radiance = SpotLights[i].Color * attenuation * DoSpotCone( SpotLights[i].DirectionVS.xyz, L, SpotLights[i].SpotAngle );
 
         /* Cook-Torrance BRDF */
@@ -354,7 +359,7 @@ float3 DoSpotLights( float3 V, float3 P, float3 N, float F0, float3 roughness, f
  *   - Metallic value
  *   - Albedo value
  */
-float3 DoDirectionalLights( float3 V, float3 P, float3 N, float F0, float3 roughness, float3 metallic, float3 albedo )
+float3 DoDirectionalLights( float3 V, float3 P, float3 N, float F0, float roughness, float metallic, float3 albedo )
 {
     /* Reflectance equation */
     float3 Lo = float3(0.0f, 0.0f, 0.0f);
@@ -423,9 +428,9 @@ float4 SampleTexture( Texture2D t, float2 uv, float4 c )
  *   - texture coordinates
  *   - blending constant
  */
-float4 SampleMetallicTexture( Texture2D t, float2 uv, float4 c )
+float SampleMetallicTexture( Texture2D t, float2 uv, float c )
 {
-    if (any(c.rgb))
+    if (c)
     {
         c *= t.Sample(TextureSampler, uv).b;
     }
@@ -443,9 +448,9 @@ float4 SampleMetallicTexture( Texture2D t, float2 uv, float4 c )
  *   - texture coordinates
  *   - blending constant
  */
-float4 SampleRoughnessTexture( Texture2D t, float2 uv, float4 c )
+float SampleRoughnessTexture( Texture2D t, float2 uv, float c )
 {
-    if (any(c.rgb))
+    if (c)
     {
         c *= t.Sample(TextureSampler, uv).g;
     }
@@ -538,9 +543,9 @@ float4 main( PixelShaderInput IN, float4 ScreenCoord : SV_Position ) : SV_TARGET
      */
 
     float4 albedo = material.Albedo;
-    float4 roughness = material.Roughness;
-    float4 metallic = material.Metallic;
-    float4 ao = material.AmbientOcclusion;
+    float roughness = material.Roughness.r;
+    float metallic = material.Metallic.r;
+    float ao = material.AmbientOcclusion;
     float2 uv = IN.TexCoord.xy;
 
     if (material.HasAlbedoTexture)
