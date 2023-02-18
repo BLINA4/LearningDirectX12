@@ -189,11 +189,13 @@ float DistributionGGX( float3 N, float3 H, float a )
 /* Geometry lightning approximation subfunction.
  * Arguments:
  *   - Normal * View value
- *   - Remapping of a (stands for roughness)
- *     Either (a + 1) * (a + 1) / 8 or a * a / 2
+ *   - Roughness value
  */
-float GeometrySchlickGGX( float NdotV, float k )
+float GeometrySchlickGGX( float NdotV, float roughness )
 {
+    float r = (roughness + 1.0);
+    float k = (r * r) / 8.0;
+
     float nom   = NdotV;
     float denom = NdotV * (1.0 - k) + k;
 	
