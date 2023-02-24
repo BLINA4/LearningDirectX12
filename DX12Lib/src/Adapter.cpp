@@ -35,7 +35,7 @@ AdapterList Adapter::GetAdapters( DXGI_GPU_PREFERENCE gpuPreference )
           ++i )
     {
         if ( SUCCEEDED(
-                 D3D12CreateDevice( dxgiAdapter.Get(), D3D_FEATURE_LEVEL_11_0, __uuidof( ID3D12Device ), nullptr ) ) )
+                 D3D12CreateDevice( dxgiAdapter.Get(), D3D_FEATURE_LEVEL_12_1, __uuidof( ID3D12Device ), nullptr ) ) )
         {
             ThrowIfFailed( dxgiAdapter.As( &dxgiAdapter4 ) );
             std::shared_ptr<Adapter> adapter = std::make_shared<MakeAdapter>( dxgiAdapter4 );

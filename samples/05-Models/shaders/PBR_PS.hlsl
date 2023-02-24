@@ -156,7 +156,7 @@ float3 LinearToSRGB( float3 x )
 
 float3 SRGBToLinear( float3 x )
 {
-    return pow(x, 1.0 / 2.2);
+    return pow(x, 2.2f);
 }
 
 float DoSpotCone( float3 spotDir, float3 L, float spotAngle )
@@ -557,11 +557,11 @@ float4 main( PixelShaderInput IN, float4 ScreenCoord : SV_Position ) : SV_TARGET
     if (material.HasMetallicTexture)
     {
         metallic = SampleMetallicTexture(MetallicTexture, uv, metallic);
-        roughness = SampleRoughnessTexture(MetallicTexture, uv, roughness);
+        roughness = max(SampleRoughnessTexture(MetallicTexture, uv, roughness), 0.001f);
     }
     if (material.HasAmbientOcclusionTexture)
     {
-        ao = SampleTexture(AmbientOcclusionTexture, uv, ao);
+        ao = SampleTexture(AmbientOcclusionTexture, uv, ao).r;
     }
 
     float3 N;

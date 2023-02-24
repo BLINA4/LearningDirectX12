@@ -9,6 +9,7 @@ set( HEADER_FILES
     inc/Light.h
     inc/SceneVisitor.h
     inc/Tutorial5.h
+    inc/RTSPSO.h
 )
 
 set( SRC_FILES
@@ -19,6 +20,7 @@ set( SRC_FILES
     src/main.cpp
     src/SceneVisitor.cpp
     src/Tutorial5.cpp
+    src/RTSPSO.cpp
 )
 
 set( VERTEX_SHADERS 
@@ -36,13 +38,29 @@ set( SHADER_INCLUDES
     shaders/Base_PS.hlsli
 )
 
+set( RAYTRACE_SHADERS 
+    shaders/RayCast.hlsl
+    shaders/MissShader.hlsl
+    shaders/HitShader.hlsl
+)
+
 set( SHADERS
     ${VERTEX_SHADERS}
     ${PIXEL_SHADERS}
     ${SHADER_INCLUDES}
+    #${RAYTRACE_SHADERS}
 )
 
 source_group( "Resources\\Shaders" FILES ${SHADERS} )
+
+set_source_files_properties( ${RAYTRACE_SHADERS}
+    PROPERTIES
+      VS_SHADER_OBJECT_FILE_NAME "${CMAKE_SOURCE_DIR}/Data/Shaders/05-Models/%(Filename).cso"
+      VS_SHADER_MODEL 6.1
+      VS_SHADER_DISABLE_OPTIMIZATIONS $<$<CONFIG:Debug>:ON>
+      VS_SHADER_ENABLE_DEBUG $<$<OR:$<CONFIG:Debug>,$<CONFIG:RelWithDebInfo>>:ON>
+      VS_SHADER_FLAGS $<$<OR:$<CONFIG:Debug>,$<CONFIG:RelWithDebInfo>>:-Qembed_debug>
+)
 
 set_source_files_properties( ${VERTEX_SHADERS} ${PIXEL_SHADERS}
     PROPERTIES

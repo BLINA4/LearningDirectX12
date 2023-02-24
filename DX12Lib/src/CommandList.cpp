@@ -51,6 +51,12 @@ CommandList::CommandList( Device& device, D3D12_COMMAND_LIST_TYPE type )
 {
     auto d3d12Device = m_Device.GetD3D12Device();
 
+    // Check if the D3D12 device actually supports ray tracing.
+    D3D12_FEATURE_DATA_D3D12_OPTIONS5 caps = {};
+    HRESULT hr = d3d12Device->CheckFeatureSupport( D3D12_FEATURE_D3D12_OPTIONS5, &caps, sizeof( caps ) );
+    if ( FAILED( hr ) || caps.RaytracingTier < D3D12_RAYTRACING_TIER_1_0 )
+        ; // failed raytracing support
+
     ThrowIfFailed(
         d3d12Device->CreateCommandAllocator( m_d3d12CommandListType, IID_PPV_ARGS( &m_d3d12CommandAllocator ) ) );
 
