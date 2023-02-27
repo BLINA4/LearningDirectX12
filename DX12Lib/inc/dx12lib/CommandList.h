@@ -521,6 +521,8 @@ public:
      */
     void Dispatch( uint32_t numGroupsX, uint32_t numGroupsY = 1, uint32_t numGroupsZ = 1 );
 
+    void DispatchRays( uint32_t numGroupsX, uint32_t numGroupsY, uint32_t numGroupsZ );
+
 protected:
     friend class CommandQueue;
     friend class DynamicDescriptorHeap;

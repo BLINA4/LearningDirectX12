@@ -2,6 +2,9 @@ cmake_minimum_required( VERSION 3.18.3 ) # Latest version of CMake when this fil
 
 set( SRC_FILES
     src/main.cpp
+    shaders/RayTracingHlslCompat.h
+    src/CommonDefine.h
+    src/shader.cpp
 )
 
 set( SHADER_FILES
@@ -9,11 +12,15 @@ set( SHADER_FILES
     shaders/PixelShader.hlsl
 )
 
+set( RAY_TRACE_FILES
+    shaders/RayTracing.hlsl
+)
+
 source_group( "Resources\\Shaders" FILES ${SHADER_FILES} )
 
 set_source_files_properties( ${SHADER_FILES} 
     PROPERTIES
-        VS_SHADER_MODEL 6.0
+        VS_SHADER_MODEL 6.5
         VS_SHADER_DISABLE_OPTIMIZATIONS $<$<CONFIG:Debug>:ON>
         VS_SHADER_ENABLE_DEBUG $<$<OR:$<CONFIG:Debug>,$<CONFIG:RelWithDebInfo>>:ON>
         VS_SHADER_FLAGS $<$<OR:$<CONFIG:Debug>,$<CONFIG:RelWithDebInfo>>:-Qembed_debug>

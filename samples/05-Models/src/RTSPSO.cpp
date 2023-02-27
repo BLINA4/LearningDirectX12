@@ -27,11 +27,10 @@ RTSPSO::RTSPSO( std::shared_ptr<dx12lib::Device> device, bool enableLighting, bo
     // Setup the root signature
     // Load the vertex shader.
     ComPtr<ID3DBlob> RayCastShaderBlob;
-    ThrowIfFailed( D3DReadFileToBlob( L"data/shaders/05-Models/RayCast.cso", &RayCastShaderBlob ) );
+    //ThrowIfFailed( D3DReadFileToBlob( L"data/shaders/05-Models/RayCast.cso", &RayCastShaderBlob ) );
 
     // Load the miss shader.
     ComPtr<ID3DBlob> MissShaderBlob;
-    // load shaders
 
     // Create a root signature.
     // Allow input layout and deny unnecessary access to certain pipeline stages.

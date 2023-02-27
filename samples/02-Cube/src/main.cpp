@@ -1,29 +1,4 @@
-#include <GameFramework/GameFramework.h>
-#include <GameFramework/Window.h>
-
-#include <dx12lib/Adapter.h>
-#include <dx12lib/CommandList.h>
-#include <dx12lib/CommandQueue.h>
-#include <dx12lib/Device.h>
-#include <dx12lib/Helpers.h>
-#include <dx12lib/IndexBuffer.h>
-#include <dx12lib/PipelineStateObject.h>
-#include <dx12lib/RootSignature.h>
-#include <dx12lib/SwapChain.h>
-#include <dx12lib/VertexBuffer.h>
-
-#include <spdlog/spdlog.h>
-
-#include <shlwapi.h>  // for CommandLineToArgvW
-
-#include <d3dcompiler.h>  // For D3DReadFileToBlob
-#include <dxgidebug.h>    // For ReportLiveObjects.
-
-#include <DirectXMath.h>  // For DirectX Math types.
-
-using namespace dx12lib;
-using namespace DirectX;
-using namespace Microsoft::WRL;
+#include "CommonDefine.h"
 
 void OnUpdate( UpdateEventArgs& e );
 void OnKeyPressed( KeyEventArgs& e );
@@ -72,6 +47,9 @@ int WINAPI wWinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLi
 #if defined( _DEBUG )
     Device::EnableDebugLayer();
 #endif
+
+    // DXC Shader compile
+    CompileShader( L"C:/Users/Administrator/Documents/GitHub/LearningDirectX12/samples/02-Cube/shaders/RayTracing.hlsl" );
 
     // Set the working directory to the path of the executable.
     WCHAR   path[MAX_PATH];

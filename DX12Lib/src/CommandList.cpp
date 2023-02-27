@@ -1600,6 +1600,19 @@ void CommandList::Dispatch( uint32_t numGroupsX, uint32_t numGroupsY, uint32_t n
     m_d3d12CommandList->Dispatch( numGroupsX, numGroupsY, numGroupsZ );
 }
 
+void CommandList::DispatchRays( uint32_t numGroupsX, uint32_t numGroupsY, uint32_t numGroupsZ )
+{
+    D3D12_DISPATCH_RAYS_DESC *pDesc;
+    FlushResourceBarriers();
+
+    for ( int i = 0; i < D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; ++i )
+    {
+        m_DynamicDescriptorHeap[i]->CommitStagedDescriptorsForDraw( *this );
+    }
+
+    m_d3d12CommandList->DispatchRays( pDesc );
+}
+
 bool CommandList::Close( const std::shared_ptr<CommandList>& pendingCommandList )
 {
     // Flush any remaining barriers.
