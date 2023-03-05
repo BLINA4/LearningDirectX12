@@ -28,5 +28,3 @@
 using namespace Microsoft::WRL;
 using namespace dx12lib;
 using namespace DirectX;
-
-ComPtr<IDxcResult> CompileShader( wchar_t* ShaderName );
