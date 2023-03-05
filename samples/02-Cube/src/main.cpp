@@ -225,6 +225,16 @@ public:
     }
 };
 
+// Create raytracing device and command list.
+void CreateRaytracingInterfaces( void )
+{
+    auto device      = pDevice->GetD3D12Device();
+    auto commandList = pDevice->GetCommandQueue().GetCommandList();
+
+    ThrowIfFailed( device->QueryInterface( IID_PPV_ARGS( &pDevice->GetD3D12Device() ) ) );
+    ThrowIfFailed( commandList->GetD3D12CommandList()->QueryInterface( IID_PPV_ARGS( &dxrCommandList ) ) );
+}
+
 void SerializeAndCreateRaytracingRootSignature( D3D12_ROOT_SIGNATURE_DESC& desc, ComPtr<ID3D12RootSignature>* rootSig )
 {
     auto             device = pDevice->GetD3D12Device();
@@ -473,13 +483,13 @@ void BuildAccelerationStructures( void )
 
     D3D12_RAYTRACING_GEOMETRY_DESC geometryDesc = {};
     geometryDesc.Type                           = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
-    geometryDesc.Triangles.IndexBuffer          = pIndexBuffer->GetGPUVirtualAddress();
+    geometryDesc.Triangles.IndexBuffer          = pIndexBuffer->GetD3D12Resource()->GetGPUVirtualAddress();
     geometryDesc.Triangles.IndexCount           = static_cast<UINT>( pIndexBuffer->GetD3D12ResourceDesc().Width ) / sizeof( WORD );
     geometryDesc.Triangles.IndexFormat          = DXGI_FORMAT_R16_UINT;
     geometryDesc.Triangles.Transform3x4         = 0;
     geometryDesc.Triangles.VertexFormat         = DXGI_FORMAT_R32G32B32_FLOAT;
     geometryDesc.Triangles.VertexCount = static_cast<UINT>( pVertexBuffer->GetD3D12ResourceDesc().Width ) / sizeof( VertexPosColor );
-    geometryDesc.Triangles.VertexBuffer.StartAddress  = pVertexBuffer->GetGPUVirtualAddress();
+    geometryDesc.Triangles.VertexBuffer.StartAddress  = pVertexBuffer->GetD3D12Resource()->GetGPUVirtualAddress();
     geometryDesc.Triangles.VertexBuffer.StrideInBytes = sizeof( VertexPosColor );
 
     // Mark the geometry as opaque.
@@ -560,20 +570,21 @@ void BuildAccelerationStructures( void )
 
     auto BuildAccelerationStructure = [&]( auto* raytracingCommandList ) {
         raytracingCommandList->BuildRaytracingAccelerationStructure( &bottomLevelBuildDesc, 0, nullptr );
-        commandList->UAVBarrier( &CD3DX12_RESOURCE_BARRIER::UAV( bottomLevelAccelerationStructure.Get() ) );
+        commandList->UAVBarrier( bottomLevelAccelerationStructure.Get() );
         raytracingCommandList->BuildRaytracingAccelerationStructure( &topLevelBuildDesc, 0, nullptr );
     };
 
     // Build acceleration structure.
     BuildAccelerationStructure( dxrCommandList.Get() );
-
+    
     // Kick off acceleration structure construction.
-    commandQueue.Flush();
+    commandQueue.ExecuteCommandList( commandList );
 
     // Wait for GPU to finish as the locally created temporary GPU resources will get released once we go out of scope.
     //deviceResources->WaitForGpu();
 }
 
+/*
 void DoRaytracing( void )
 {
     auto DispatchRays = [&]( auto* list, auto* stateObject, auto* dispatchDesc ) {
@@ -604,6 +615,7 @@ void DoRaytracing( void )
     //                                            topLevelAccelerationStructure->GetGPUVirtualAddress() );
     DispatchRays( dxrCommandList.Get(), dxrStateObject.Get(), &dispatchDesc );
 }
+*/
 
 int WINAPI wWinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLine, int nCmdShow )
 {
@@ -653,6 +665,7 @@ int WINAPI wWinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLi
         pGameWindow->Update += &OnUpdate;
         pGameWindow->Close += &OnWindowClose;
 
+        CreateRaytracingInterfaces();
         CreateRootSignatures();
         RTPSO();
         CreateDescriptorHeap();
@@ -727,7 +740,7 @@ int WINAPI wWinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLi
         // Make sure the index/vertex buffers are loaded before rendering the first frame.
         commandQueue.Flush();
 
-        DoRaytracing();
+        //DoRaytracing();
 
         pGameWindow->Show();
 
