@@ -27,7 +27,6 @@ std::shared_ptr<Texture>             pDepthTexture        = nullptr;
 std::shared_ptr<VertexBuffer>        pVertexBuffer        = nullptr;
 std::shared_ptr<IndexBuffer>         pIndexBuffer         = nullptr;
 std::shared_ptr<RootSignature>       pRootSignature       = nullptr;
-std::shared_ptr<PipelineStateObject> pPipelineStateObject = nullptr;
 
 int width = 1920, height = 1080;
 
@@ -35,7 +34,6 @@ float FieldOfView = 45.0f;
 
 // Pipeline state object for RT
 ComPtr<ID3D12StateObject>            dxrStateObject;
-ComPtr<ID3D12GraphicsCommandList4>   dxrCommandList;
 
 // Buffer for constants
 RayGenConstantBuffer                 rayGenCB;
@@ -58,6 +56,11 @@ ComPtr<ID3D12Resource>               RayGenShaderTable;
 ComPtr<ID3D12Resource>               accelerationStructure;
 ComPtr<ID3D12Resource>               bottomLevelAccelerationStructure;
 ComPtr<ID3D12Resource>               topLevelAccelerationStructure;
+
+// Raytracing output
+ComPtr<ID3D12Resource>               raytracingOutput;
+D3D12_GPU_DESCRIPTOR_HANDLE          raytracingOutputResourceUAVGpuDescriptor;
+UINT                                 raytracingOutputResourceUAVDescriptorHeapIndex;
 
 Logger logger;
 
@@ -232,7 +235,6 @@ void CreateRaytracingInterfaces( void )
     auto commandList = pDevice->GetCommandQueue().GetCommandList();
 
     ThrowIfFailed( device->QueryInterface( IID_PPV_ARGS( &pDevice->GetD3D12Device() ) ) );
-    ThrowIfFailed( commandList->GetD3D12CommandList()->QueryInterface( IID_PPV_ARGS( &dxrCommandList ) ) );
 }
 
 void SerializeAndCreateRaytracingRootSignature( D3D12_ROOT_SIGNATURE_DESC& desc, ComPtr<ID3D12RootSignature>* rootSig )
@@ -363,11 +365,50 @@ void CreateDescriptorHeap( void )
     descriptorSize = device->GetDescriptorHandleIncrementSize( D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV );
 }
 
+UINT AllocateDescriptor( D3D12_CPU_DESCRIPTOR_HANDLE* cpuDescriptor, UINT  descriptorIndexToUse )
+{
+    auto descriptorHeapCpuBase = descriptorHeap->GetCPUDescriptorHandleForHeapStart();
+    if ( descriptorIndexToUse >= descriptorHeap->GetDesc().NumDescriptors )
+    {
+        descriptorIndexToUse = descriptorsAllocated++;
+    }
+    *cpuDescriptor = CD3DX12_CPU_DESCRIPTOR_HANDLE( descriptorHeapCpuBase, descriptorIndexToUse, descriptorSize );
+    return descriptorIndexToUse;
+}
+
+// Create 2D output texture for raytracing.
+void CreateRaytracingOutputResource()
+{
+    auto device           = pDevice->GetD3D12Device();
+    // Use the render target from the swapchain.
+    auto renderTarget     = pSwapChain->GetRenderTarget();
+    auto backbufferFormat = renderTarget.GetRenderTargetFormats().RTFormats[0];
+
+    // Create the output resource. The dimensions and format should match the swap-chain.
+    auto uavDesc = CD3DX12_RESOURCE_DESC::Tex2D( backbufferFormat, width, height, 1, 1, 1, 0,
+                                                 D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS );
+
+    auto defaultHeapProperties = CD3DX12_HEAP_PROPERTIES( D3D12_HEAP_TYPE_DEFAULT );
+    ThrowIfFailed( device->CreateCommittedResource( &defaultHeapProperties, D3D12_HEAP_FLAG_NONE, &uavDesc,
+                                                    D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nullptr,
+                                                    IID_PPV_ARGS( &raytracingOutput ) ) );
+    NAME_D3D12_OBJECT( raytracingOutput );
+
+    D3D12_CPU_DESCRIPTOR_HANDLE uavDescriptorHandle;
+    raytracingOutputResourceUAVDescriptorHeapIndex =
+        AllocateDescriptor( &uavDescriptorHandle, raytracingOutputResourceUAVDescriptorHeapIndex );
+    D3D12_UNORDERED_ACCESS_VIEW_DESC UAVDesc = {};
+    UAVDesc.ViewDimension                    = D3D12_UAV_DIMENSION_TEXTURE2D;
+    device->CreateUnorderedAccessView( raytracingOutput.Get(), nullptr, &UAVDesc, uavDescriptorHandle );
+    raytracingOutputResourceUAVGpuDescriptor =
+        CD3DX12_GPU_DESCRIPTOR_HANDLE( descriptorHeap->GetGPUDescriptorHandleForHeapStart(),
+                                       raytracingOutputResourceUAVDescriptorHeapIndex, descriptorSize );
+}
+
 // Build geometry used in the sample.
 void BuildGeometry( CommandQueue &queue )
 {
     auto  commandList     = queue.GetCommandList();
-    auto  device          = pDevice->GetD3D12Device();
 
     // Load vertex data:
     pVertexBuffer = commandList->CopyVertexBuffer( _countof( Vertices ), sizeof( VertexPosColor ), Vertices );
@@ -575,17 +616,13 @@ void BuildAccelerationStructures( void )
     };
 
     // Build acceleration structure.
-    BuildAccelerationStructure( dxrCommandList.Get() );
+    BuildAccelerationStructure( commandList->GetD3D12CommandList().Get() );
     
     // Kick off acceleration structure construction.
     commandQueue.ExecuteCommandList( commandList );
-
-    // Wait for GPU to finish as the locally created temporary GPU resources will get released once we go out of scope.
-    //deviceResources->WaitForGpu();
 }
 
-/*
-void DoRaytracing( void )
+void DoRaytracing( std::shared_ptr<dx12lib::CommandList> commandList )
 {
     auto DispatchRays = [&]( auto* list, auto* stateObject, auto* dispatchDesc ) {
         // Since each shader table has only one shader record, the stride is same as the size.
@@ -604,18 +641,17 @@ void DoRaytracing( void )
         list->DispatchRays( dispatchDesc );
     };
 
-    //list.SetComputeRootSignature( raytracingGlobalRootSignature.Get() );
+    commandList->GetD3D12CommandList()->SetComputeRootSignature( raytracingGlobalRootSignature.Get() );
 
     // Bind the heaps, acceleration structure and dispatch rays.
     D3D12_DISPATCH_RAYS_DESC dispatchDesc = {};
-    //list.SetDescriptorHeaps( 1, descriptorHeap.GetAddressOf() );
-    //list.SetComputeRootDescriptorTable( GlobalRootSignatureParams::OutputViewSlot,
-    //                                            raytracingOutputResourceUAVGpuDescriptor );
-    //list.SetComputeRootShaderResourceView( GlobalRootSignatureParams::AccelerationStructureSlot,
-    //                                            topLevelAccelerationStructure->GetGPUVirtualAddress() );
-    DispatchRays( dxrCommandList.Get(), dxrStateObject.Get(), &dispatchDesc );
+    commandList->GetD3D12CommandList()->SetDescriptorHeaps( 1, descriptorHeap.GetAddressOf() );
+    commandList->GetD3D12CommandList()->SetComputeRootDescriptorTable(    GlobalRootSignatureParams::OutputViewSlot,
+                                                                          raytracingOutputResourceUAVGpuDescriptor );
+    commandList->GetD3D12CommandList()->SetComputeRootShaderResourceView( GlobalRootSignatureParams::AccelerationStructureSlot,
+                                                                          topLevelAccelerationStructure->GetGPUVirtualAddress() );
+    DispatchRays( commandList->GetD3D12CommandList().Get(), dxrStateObject.Get(), &dispatchDesc );
 }
-*/
 
 int WINAPI wWinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLine, int nCmdShow )
 {
@@ -646,7 +682,7 @@ int WINAPI wWinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLi
         logger->info( L"Device Created: {}", description );
 
         // Use a copy queue to copy GPU resources.
-        auto& commandQueue = pDevice->GetCommandQueue( D3D12_COMMAND_LIST_TYPE_COPY );
+        auto& commandQueue = pDevice->GetCommandQueue();
         auto  commandList  = commandQueue.GetCommandList();
 
         BuildGeometry( commandQueue );
@@ -671,76 +707,10 @@ int WINAPI wWinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLi
         CreateDescriptorHeap();
         BuildAccelerationStructures();
         BuildShaderTables();
-
-        // Create the vertex input layout
-        /*
-         D3D12_INPUT_ELEMENT_DESC inputLayout[] = {
-            { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
-              D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-            { "COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
-              D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        };
-        */
-
-        // Create the root signature.
-        // Allow input layout and deny unnecessary access to certain pipeline stages.
-        /* 
-        D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
-                                                        D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
-                                                        D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
-                                                        D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-                                                        D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
-                                                        D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
-        */
-
-        // A single 32-bit constant root parameter that is used by the vertex shader.
-        /*
-        CD3DX12_ROOT_PARAMETER1 rootParameters[1];
-        rootParameters[0].InitAsConstants( sizeof( XMMATRIX ) / 4, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX );
-
-        CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDescription( _countof( rootParameters ), rootParameters, 0,
-                                                                        nullptr, rootSignatureFlags );
-
-        pRootSignature = pDevice->CreateRootSignature( rootSignatureDescription.Desc_1_1 );
-        */
-
-        // Load shaders
-        // Load the vertex shader.
-        //ComPtr<ID3DBlob> vertexShaderBlob;
-        //ThrowIfFailed( D3DReadFileToBlob( L"VertexShader.cso", &vertexShaderBlob ) );
-
-        // Load the pixel shader.
-        //ComPtr<ID3DBlob> pixelShaderBlob;
-        //ThrowIfFailed( D3DReadFileToBlob( L"PixelShader.cso", &pixelShaderBlob ) );
-
-        // Create the pipeline state object.
-        /*
-        struct PipelineStateStream
-        {
-            CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE        pRootSignature;
-            CD3DX12_PIPELINE_STATE_STREAM_INPUT_LAYOUT          InputLayout;
-            CD3DX12_PIPELINE_STATE_STREAM_PRIMITIVE_TOPOLOGY    PrimitiveTopologyType;
-            CD3DX12_PIPELINE_STATE_STREAM_VS                    VS;
-            CD3DX12_PIPELINE_STATE_STREAM_PS                    PS;
-            CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL_FORMAT  DSVFormat;
-            CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS RTVFormats;
-        } pipelineStateStream;
-
-        pipelineStateStream.pRootSignature        = pRootSignature->GetD3D12RootSignature().Get();
-        pipelineStateStream.InputLayout           = { inputLayout, _countof( inputLayout ) };
-        pipelineStateStream.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-        pipelineStateStream.VS                    = CD3DX12_SHADER_BYTECODE( vertexShaderBlob.Get() );
-        pipelineStateStream.PS                    = CD3DX12_SHADER_BYTECODE( pixelShaderBlob.Get() );
-        pipelineStateStream.DSVFormat             = DXGI_FORMAT_D32_FLOAT;
-        pipelineStateStream.RTVFormats            = pSwapChain->GetRenderTarget().GetRenderTargetFormats();
-
-        pPipelineStateObject = pDevice->CreatePipelineStateObject( pipelineStateStream );
-        */
+        CreateRaytracingOutputResource();
 
         // Make sure the index/vertex buffers are loaded before rendering the first frame.
         commandQueue.Flush();
-
-        //DoRaytracing();
 
         pGameWindow->Show();
 
@@ -817,30 +787,24 @@ void OnUpdate( UpdateEventArgs& e )
     auto& commandQueue = pDevice->GetCommandQueue( D3D12_COMMAND_LIST_TYPE_DIRECT );
     auto  commandList  = commandQueue.GetCommandList();
 
-    // Set the pipeline state object
-    //commandList->SetPipelineState( pPipelineStateObject );
     // Set the root signatures.
-    //commandList->SetGraphicsRootSignature( pRootSignature );
+    //commandList->SetGraphicsRootSignature( raytracingGlobalRootSignature );
 
     // Set root parameters
     //commandList->SetGraphics32BitConstants( 0, mvpMatrix );
 
     // Clear the color and depth-stencil textures.
-    //const FLOAT clearColor[] = { 0.4f, 0.6f, 0.9f, 1.0f };
-    //commandList->ClearTexture( renderTarget.GetTexture( AttachmentPoint::Color0 ), clearColor );
-    //commandList->ClearDepthStencilTexture( pDepthTexture, D3D12_CLEAR_FLAG_DEPTH );
+    const FLOAT clearColor[] = { 0.4f, 0.6f, 0.9f, 1.0f };
+    commandList->ClearTexture( renderTarget.GetTexture( AttachmentPoint::Color0 ), clearColor );
+    commandList->ClearDepthStencilTexture( pDepthTexture, D3D12_CLEAR_FLAG_DEPTH );
 
-    //commandList->SetRenderTarget( renderTarget );
-    //commandList->SetViewport( renderTarget.GetViewport() );
-    //commandList->SetScissorRect( CD3DX12_RECT( 0, 0, LONG_MAX, LONG_MAX ) );
+    commandList->SetRenderTarget( renderTarget );
+    commandList->SetViewport( renderTarget.GetViewport() );
+    commandList->SetScissorRect( CD3DX12_RECT( 0, 0, LONG_MAX, LONG_MAX ) );
+    
+    DoRaytracing( commandList );
 
-    // Render the cube.
-    //commandList->SetVertexBuffer( 0, pVertexBuffer );
-    //commandList->SetIndexBuffer( pIndexBuffer );
-    //commandList->SetPrimitiveTopology( D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST );
-    //commandList->DrawIndexed( pIndexBuffer->GetNumIndices() );
-
-    //commandQueue.ExecuteCommandList( commandList );
+    commandQueue.ExecuteCommandList( commandList );
 
     // Present the image to the window.
     pSwapChain->Present();
