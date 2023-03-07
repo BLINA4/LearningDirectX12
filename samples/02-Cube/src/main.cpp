@@ -34,6 +34,7 @@ float FieldOfView = 45.0f;
 
 // Pipeline state object for RT
 ComPtr<ID3D12StateObject>            dxrStateObject;
+ComPtr<ID3D12GraphicsCommandList4>   dxrCommandList;
 
 // Buffer for constants
 RayGenConstantBuffer                 rayGenCB;
@@ -231,10 +232,9 @@ public:
 // Create raytracing device and command list.
 void CreateRaytracingInterfaces( void )
 {
-    auto device      = pDevice->GetD3D12Device();
     auto commandList = pDevice->GetCommandQueue().GetCommandList();
 
-    ThrowIfFailed( device->QueryInterface( IID_PPV_ARGS( &pDevice->GetD3D12Device() ) ) );
+    ThrowIfFailed( commandList->GetD3D12CommandList()->QueryInterface( IID_PPV_ARGS( &dxrCommandList ) ) );
 }
 
 void SerializeAndCreateRaytracingRootSignature( D3D12_ROOT_SIGNATURE_DESC& desc, ComPtr<ID3D12RootSignature>* rootSig )
@@ -616,8 +616,8 @@ void BuildAccelerationStructures( void )
     };
 
     // Build acceleration structure.
-    BuildAccelerationStructure( commandList->GetD3D12CommandList().Get() );
-    
+    BuildAccelerationStructure( dxrCommandList.Get() );
+
     // Kick off acceleration structure construction.
     commandQueue.ExecuteCommandList( commandList );
 }
